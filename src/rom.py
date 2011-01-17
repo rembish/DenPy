@@ -1,26 +1,27 @@
+from os.path import basename
 from struct import unpack
 
-from ppu.tile import Tile
-
-NES_PRGROM_PAGESIZE = 0x4000
-NES_CHRROM_PAGESIZE = 0x1000
-NES_TRAINER_SIZE = 0x200
+from singleton import Singleton
 
 class Rom(object):
+    __metaclass__ = Singleton
+    
+    PRGROM_PAGESIZE = 0x4000
+    CHRROM_PAGESIZE = 0x1000
+    TRAINER_SIZE = 0x200
+
     VERTICAL_MIRRORING = 0
     HORIZONTAL_MIRRORING = 1
     FOURSCREEN_MIRRORING = 2
 
-    def __init__(self, owner):
-        self.owner = owner
+    def __init__(self):
         self.filename = None
 
         self.rom_count = 0
-        self.rom = []
+        self.roms = []
 
         self.vrom_count = 0
-        self.vrom = []
-        self.tiles = []
+        self.vroms = []
 
         self.battery_ram = None
         self.trainer = None
@@ -30,7 +31,7 @@ class Rom(object):
 
         self.mapper_type = None
 
-        self.is_valid = False
+        self.is_valid = None
 
     def load(self, filename):
         id = open(filename, 'rb')
@@ -43,8 +44,6 @@ class Rom(object):
         if signature != 'NES' and _x1a != 0x1a:
             raise Exception('Checking singnature "NES" failed')
 
-        self.vrom_count *= 2
-
         self.mirroring = rom_control_byte_1 & 0x01
         self.battery_ram = rom_control_byte_1 & 0x02
         is_trainer = rom_control_byte_1 & 0x04
@@ -52,33 +51,23 @@ class Rom(object):
         self.mapper_type = (rom_control_byte_1 >> 4) | (rom_control_byte_2 & 0xF0)
 
         if _x00000000 != 0x00000000:
-            self.mapper_type &= 0xF
+            self.is_valid = False
 
         # For now skip the trainer if it exists.
         if is_trainer & 0x04:
-            self.trainer = id.read(NES_TRAINER_SIZE)
+            self.trainer = id.read(self.TRAINER_SIZE)
 
         for i in range(self.rom_count):
-            self.rom.append(id.read(NES_PRGROM_PAGESIZE))
+            self.roms.append(id.read(self.PRGROM_PAGESIZE))
 
         for i in range(self.vrom_count):
-            self.vrom.append(id.read(NES_CHRROM_PAGESIZE))
-            self.tiles.append([Tile()] * 256)
-
-            for j in range(len(self.vrom[i])):
-                tile_index = j >> 4
-                left_over = j % 16
-
-                if left_over < 8:
-                    self.tiles[i][tile_index].set_scanline(left_over,
-                        self.vrom[i][j], self.vrom[i][i + 8])
-                else:
-                    self.tiles[i][tile_index].set_scanline(left_over - 8,
-                        self.vrom[i][j - 8], self.vrom[i][i])
+            self.vroms.append(id.read(self.CHRROM_PAGESIZE))
 
         id.close()
 
-        self.is_valid = True
+        if self.is_valid == None:
+            self.is_valid = True
+
         self.filename = filename
 
     def get_mirrowing(self):
@@ -94,3 +83,8 @@ class Rom(object):
         if self.filename:
             self.load(self.filename)
 
+    def __repr__(self):
+        return '<ROM:%s PRG-ROMs=%d CHR-ROMs=%d>' % (
+            basename(self.filename or 'empty'),
+            self.rom_count or 'no', self.vrom_count or 'no'
+        )

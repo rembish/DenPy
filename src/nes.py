@@ -1,12 +1,16 @@
+from singleton import Singleton
+
 from cpu import Cpu
 from ppu import Ppu
 from rom import Rom
 from mapper import Mapper
 
 class Nes(object):
+    __metaclass__ = Singleton
+
     def __init__(self):
-        self.cpu = Cpu(self)
-        self.ppu = Ppu(self)
+        self.cpu = Cpu()
+        self.ppu = Ppu()
 
         self.rom = None
         self.memory = None
@@ -30,12 +34,12 @@ class Nes(object):
         if self.is_running:
             self.stop()
 
-        self.rom = Rom(self)
+        self.rom = Rom()
         self.rom.load(filename)
 
         if self.rom.is_valid:
             self.memory = Mapper(self.rom.mapper_type)
-            if not self.memory:
+            if self.memory == None:
                 raise Exception('Unknown mapper: %d' % self.rom.mapper_type)
 
             self.memory.load()
